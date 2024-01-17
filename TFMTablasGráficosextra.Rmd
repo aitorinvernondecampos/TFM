@@ -1,0 +1,901 @@
+---
+# Título: Assessing the properties of asymptotic PERMANOVA
+#         test through comprehensive simulations in the
+#         context of genetic studies
+# Título corto: Properties of asymptotic PERMANOVA
+# Autor: Aitor Invernón de Campos
+# Nombre Tutores: Miquel Calvo Llorca y Diego Garrido-Martín 
+# Nombre Profesorado Responsable Asignatura: David Merino Arranz
+# Titulación: Máster universitario de Bioinformática y Bioestadística (UOC, UB)
+# Área del trabajo: Analisis de datos Ómicos
+
+title: 'TFM: Properties of asymptotic PERMANOVA'
+lang: es
+author: |
+  | <font size="4"> Aitor Invernón de Campos </font>
+  | <font size="2"> aitorinvernondecampos@uoc.edu </font>
+  | <font size="2">  </font>  
+  | <font size="2"> Màster universitari en Bioinformàtica i Bioestadística UOC-UB </font>
+date: "`r format(Sys.time(), '%d %m %Y')`"
+# Fecha en Español: Sys.setlocale("LC_TIME", "es_ES.UTF-8")
+# Data en Català: Sys.setlocale("LC_TIME", "ca_ES.UTF-8")
+
+header-includes:
+\renewcommand{\tablename}{Tabla}
+\renewcommand{\figurename}{Figura}
+\usepackage{float}
+\floatplacement{figure}{H}
+\usepackage[spanish]{babel}  
+output:
+  pdf_document:
+  toc: yes
+number_sections: yes
+toc_depth: 2
+fig_width: 5.5
+fig_height: 5
+fig_caption: yes
+highlight: tango
+df_print: tibble
+citation_package: natbib
+latex_engine: xelatex
+dev: cairo_pdf # Permet mostrar símbols Unicode a les gràfiques.
+extra_dependencies:
+  caption: ["font=footnotesize", "labelfont={bf}", "justification=centering"]
+bookdown::pdf_book:
+  html_document:
+  toc: yes
+number_sections: yes
+toc_depth: 2
+fig_width: 7
+fig_height: 6
+fig_caption: yes
+highlight: tango
+df_print: paged
+toc-title: "Contenidos"
+linkcolor: 'blue'
+link-citations: yes
+---
+
+```{r packginstall, include = FALSE}
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+#                Instalación de los paquetes necesarios                   #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+install.packages("stargazer")
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+```
+
+
+```{r setup, include = FALSE}
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# Configuración del "chunk" para mostrar el código + centrar las figuras  #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+knitr::opts_chunk$set(echo = TRUE, fig.align="center")
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+```
+
+```{r wrap-hook, include = FALSE}
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+#  Permite modificar la longitud de cada línia de resultados del "chunk"  #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+library(knitr)
+hook_output = knit_hooks$get('output')
+knit_hooks$set(output = function(x, options) {
+  # this hook is used only when the linewidth option is not NULL
+  if (!is.null(n <- options$linewidth)) {
+    x = knitr:::split_lines(x)
+    # any lines wider than n should be wrapped
+    if (any(nchar(x) > n)) x = strwrap(x, width = n)
+    x = paste(x, collapse = '\n')
+  }
+  hook_output(x, options)
+})
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+```
+
+
+Creación de las tablas de la memoria del TFM
+
+
+```{r TablasGráficos, message = FALSE, echo = FALSE, results = 'asis', warning = F, include = FALSE}
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                 Tabla y Gráficos Datos Simulación                       #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Listados de las variables necesarias y sus equivalencias:
+# ---------------------------------------------------------
+list(# FIJAS: a priori, no deberían influir en los resultados.
+  "modelSim" <- "mvnorm", # m_values ∈ c("mvnorm", "simplex", "multinom")
+  "a" <- 2, # a_values ∈ c(1:6)
+  "b" <- 3, # b_values ∈ c(1:6)
+  "u" <- 1, # u_values ∈ c(seq(0.1, 2, 0.1))
+  "w" <- "B", # w_values ∈ c("A", "B", "AB")
+  "hk" <- 1,
+  "k" <- 0, # k_values ∈ c(0, 1)
+  "plotheatmap" <- F, # plotheatmap_values ∈ as.logical(c("F", "T"))
+  "D" <- "unif-0-1",
+  "l" <- 1000,
+  "s" <- 0.1,
+  "p" <- 1,
+  "pdist" <- "norm", # pdist_values ∈ c("norm", "gamma", "beta")
+  "x" <- 10,
+  # VARIABLES: a estudiar su potencial influencia en los resultados. 
+  "Alpha_values" <- c(0.05, 0.01, 0.001), # Niveles de significación (α) más comunes.
+  "S_values" <- c(1E2, 1E3, 1E4), # Número de simulaciones, aumentar S debería aumentar la precisión.
+                                  # Máx. 1E4 si se quiere aumentar la precisión sin elevar el tiempo de computación.
+  "n_values" <- c(seq(200, 400, 100)), # Tamaño de la muestra.
+                                       # Valor que equilibra la representatividad de los resultados con el tiempo de computación.
+  "Var_values" <- c("Equal", "Unequal Type I", "Unequal Type II", "Unequal Type III"), # Varianza de las variables de Y.
+                                                                                       # Ver "Sim.mvnorm" para detalles
+  "q_values" <- c(3), # Número de respuestas .𝜏. para q > 5 "SITIOS EXTRAÑOS"!
+                      # Variable <=> "simplex" .𝜏. c(3, 5, 8, 10)
+                      #              ∀ q ∈ "qlocstdev.norm.tsv" [c(2, 3, 5, 8, 10, 12, 15, 20, 25)]
+                      # No aplica <=> "mvnorm" .𝜏. c(3)
+  "loc_values" <- c(NA), # Ubicación del modelo generador "simplex" (p / position / loc).
+                         # e.g. Si (loc = 1/3) ≡> "Centro del simplex" | (loc -> 1) ≡> "Vértice del simplex"
+                         # Variable <=> "simplex" .𝜏. c(1, 2, 3, 5, 8, 10)
+                         #              ∀ loc ∈ "qlocstdev.norm.tsv" [c(1, 2, 3, 5, 8, 10)]
+                         # No aplica <=> "mvnorm" .𝜏. c(NA)
+  "delta_values" <- c(seq(0, 0.35, 0.0175)), # delta (∆) => Δ = 0 evalúa H0 y Δ > 0 evaluará H1.
+                                             # El "step" usado depende de la prueba-error del método para diferentes Δ ≠ 0,
+                                             # teniendo en cuenta cómo la [Potencia -> 1] en cada método.
+  "Cor_values" <- c(seq(0, 0.8, 0.2)), # Correlación de las variables del conjunto de datos Y (Cor).
+                                       # Siempre: 0 <= Cor < 1
+                                       # Variable <=> "mvnorm" .𝜏. c(seq(0, 0.8, 0.2))
+                                       # No aplica <=> "simplex" .𝜏. c(NA)
+  "lambda_values" <- c(NA) # Parámetro lambda (distrib. Poisson).
+                           # Variable <=> "multinom" .𝜏. c(seq(200, 1200, 200))
+                           # No aplica <=> "mvnorm" y en "simplex" .𝜏. c(NA)
+)
+
+list(# Equivalencias de algunas variables:
+  "chunk" <- k,
+  "DistDef" <- dd <- D,
+  "p_dist" <- pdist,
+  "heterosk" <- H <- hk,
+  "cores" <- x,
+  "fx" <- f)
+
+# Número total de simulaciones:
+Nmax_simul <- length(Alpha_values)*length(S_values)*length(n_values)*
+  length(Var_values)*length(q_values)*length(loc_values)*
+  length(delta_values)*length(Cor_values)*length(lambda_values)
+
+# Restringimos los valores a simular:
+Alpha_values_sim <- Alpha_values[1]
+S_values_sim <- S_values[2]
+n_values_sim <- n_values[2]
+Var_values_sim <- Var_values[]
+q_values_sim <- q_values[]
+loc_values_sim <- loc_values[]
+delta_values_sim <- delta_values[]
+Cor_values_sim <- Cor_values[]
+lambda_values_sim <- lambda_values[]
+
+# ---------------------------------------------------------
+
+# DF Sim:
+# -------
+DF_names <- c("Nivel de significación",
+              "Número de simulaciones",
+              "Tamaño de la muestra",
+              "Tipo de varianza",
+              "Número de respuestas",
+              # "Localización del símplex",
+              "Parámetro de generación de H1",
+              "Correlación de las variables"
+)
+
+DF_sym <- c("alpha",
+            "S",
+            "n",
+            "Var",
+            "q",
+            # "loc",
+            "Delta",
+            "Cor"
+)
+
+DF_values <- c(toString(Alpha_values_sim),
+               toString(S_values_sim),
+               toString(n_values_sim),
+               toString(Var_values_sim),
+               toString(q_values_sim),
+               # toString(loc_values_sim),
+               toString(paste0("De ", delta_values_sim[1],
+                               " a ", delta_values_sim[length(delta_values_sim)],
+                               " con un paso de ", delta_values_sim[2]-delta_values_sim[1],
+                               " (", length(delta_values_sim), " valores)")),
+               toString(Cor_values_sim)
+)
+
+DFSim1 <- data.frame(Variables = DF_names,
+                     Símbolo = DF_sym,
+                     Valores = DF_values,
+                     row.names = NULL)
+
+colnames(DFSim1) <- c("Variable", "Símbolo", "Valores")
+
+# -------
+
+# Otros
+# -----
+NumSimFinal <- length(Alpha_values_sim)*length(S_values_sim)*length(n_values_sim)*
+  length(Var_values_sim)*length(q_values_sim)*length(loc_values_sim)*
+  length(delta_values_sim)*length(Cor_values_sim)*length(lambda_values_sim)
+  
+library(stargazer)
+stargazer(DFSim1, type = 'latex', summary=FALSE, rownames=FALSE,
+          header=FALSE, title="Primera simulación del primer objetivo: $\\alpha = 0.05$; 
+          $S = 1000$; $n = 300$; $q = 3$; combinaciones $\\Delta - Var$",
+          label="tab:TabSim1", font.size = "scriptsize", single.row = TRUE,
+          column.sep.width = "-8pt", digits=2, no.space = TRUE)
+
+# -----
+
+
+
+
+# # # # # # # # # # # # # # # # # # # # # # # #
+#             Simulaciones mvnorm             #
+#                                             #
+#        "Sim. 31-12-2023 20 h 10 min"        #
+#                      +                      #
+#        "Sim. 08-01-2024 19 h 19 min"        #
+#                                             #
+# # # # # # # # # # # # # # # # # # # # # # # #
+#       Matriz de correlación homogénea       #
+#    (mismo valor Cor fuera de la diagonal)   #
+# # # # # # # # # # # # # # # # # # # # # # # #
+#         α = (0.05, 0.01, 0.001)             #
+# # # # # # # # # # # # # # # # # # # # # # # #
+# ---------------------------------------------
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# Directorio de la primera simulación a representar:
+setwd(file.path(getwd(), "Resultados/Modelo mvnorm/Sim. 31-12-2023 20 h 10 min"))
+DF_Results_Graph_2graph1 <- read.csv("DF_Results_Graph.csv")
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# Directorio de la segunda simulación a representar:
+setwd(file.path(getwd(), "Resultados/Modelo mvnorm/Sim. 08-01-2024 19 h 19 min"))
+DF_Results_Graph_2graph2 <- read.csv("DF_Results_Graph.csv")
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# Directorio de la unión de simulaciones:
+setwd(file.path(getwd(), "Resultados/Modelo mvnorm/Resultados Memoria"))
+
+# Unión de los DF:
+DF_Results_Graph_2graph <- rbind(DF_Results_Graph_2graph1, DF_Results_Graph_2graph2)
+DF_Results_Graph_2graph <- DF_Results_Graph_2graph[order(DF_Results_Graph_2graph$Método), ]
+
+## Para mvnorm forzamos que todos los valores de loc y lambda son NA.
+DF_Results_Graph_2graph$loc <- c(rep(NA, dim(DF_Results_Graph_2graph)[1]))
+DF_Results_Graph_2graph$lambda <- c(rep(NA, dim(DF_Results_Graph_2graph)[1]))
+
+## Para mvnorm no se aplicará ni Yscaled ni YnormMinMax ya que se genera otro estadístico diferente al que se está estudiando
+## (p_valor) y que, a parte de que no tiene porque ser invariante a transformaciones, NO SIRVE PARA COMPARAR MANTA-MANOVA.
+## Para simplex solo se estudiará MANTA, así que no es necesario corregir ni Ylog ni Yclr.
+
+# => Filtramos las transformaciones no necesarias:
+# .𝜏. unique(DF_Results_Graph_2graph$Datos)[c(1)] <=> Sin transformar
+# .𝜏. unique(DF_Results_Graph_2graph$Datos)[c(1, 4, 5, 6)]] <=> Sin transformar + clr + log-ratio + sqrt
+DF_Results_Graph_2graph <- DF_Results_Graph_2graph[DF_Results_Graph_2graph$Datos ==
+                                                     c(unique(DF_Results_Graph_2graph$Datos)[1:4]), ]
+# => Otros arreglos para la gráfica: etiquetas de Var + formato de Cor.
+DF_Results_Graph_2graph$Var[DF_Results_Graph_2graph$Var == "equal"] <- "Equal"
+DF_Results_Graph_2graph$Var[DF_Results_Graph_2graph$Var == "unequal"] <- "Unequal Type I"
+DF_Results_Graph_2graph$Var[DF_Results_Graph_2graph$Var == "unequalALT1"] <- "Unequal Type II"
+DF_Results_Graph_2graph$Var[DF_Results_Graph_2graph$Var == "unequalALT2"] <- "Unequal Type III"
+DF_Results_Graph_2graph[,'Cor'] = format(round(DF_Results_Graph_2graph[,'Cor'], 1), nsmall = 1)
+
+cat("\014") # Clean console
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+DFtable <- subset(DF_Results_Graph_2graph, select = c(-loc, -stdev, -lambda))
+totres = dim(DFtable)[1]
+nhead = 15
+DFsampletable <- data.table(DFtable)[sample(.N, nhead)]
+DFsampletable[, 12] <- round(DFsampletable[, 12], digits = 2)
+
+stargazer(DFsampletable, type = 'latex', summary=FALSE, rownames=FALSE,
+          header=FALSE, title=paste0("Muestra aleatoria de ", nhead, " de los ", totres,
+                                     " resultados obtenidos para las simulaciones detalladas en "),
+          label="tab:TabSim1", font.size = "scriptsize", single.row = TRUE,
+          column.sep.width = "-8pt", digits = 4, no.space = TRUE)
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# ---------------------------------------------
+
+# Sumarios estadísticos de la Potencia y el Tiempo de computación según el tipo de datos y alpha:
+# -----------------------------------------------------------------------------------------------
+MethodName <- "MANTA"
+# MethodName <- "MANOVA"
+for (TipoDatos in unique(DF_Results_Graph_2graph$Datos)){
+  for (AlphaSim in unique(DF_Results_Graph_2graph$alpha)){
+    
+    DFsummary <- DF_Results_Graph_2graph[DF_Results_Graph_2graph$Método == MethodName &
+                                           DF_Results_Graph_2graph$Datos == TipoDatos &
+                                           DF_Results_Graph_2graph$alpha == AlphaSim, ]
+    DFsummary <- DFsummary[, c(14, 15)]
+    
+    stargazer(DFsummary, type = 'latex', summary=TRUE, rownames=TRUE,
+              header=FALSE, title=paste0("Sumario estadístico de la Potencia y el tiempo 
+              de computación empleado en las simulaciones mvnorm de un conjunto de datos",
+              TipoDatos, ", y para un alpha =", AlphaSim, ", mediante el método ", MethodName),
+              label="tab:TabSim1", font.size = "scriptsize", single.row = TRUE,
+              column.sep.width = "-8pt", digits = 4, no.space = TRUE)
+  }
+}
+
+# -----------------------------------------------------------------------------------------------
+
+# Sumario estadístico de la Potencia según Método - alpha - Cor - Var: <=???
+# --------------------------------------------------------------------
+TapplySumVarDF <- data.frame()
+
+SumrzModeloName = unique(DF_Results_Graph_2graph$Modelo)[1]
+SumrzMetodoName = unique(DF_Results_Graph_2graph$Método)[1]
+SumrzDatosName = unique(DF_Results_Graph_2graph$Datos)[1]
+SumrzAlphaName = unique(DF_Results_Graph_2graph$alpha)[1]
+SumrzCorName = as.numeric(unique(DF_Results_Graph_2graph$Cor))
+
+for (SumrzCorValue in SumrzCorName){
+    
+    DF_Results_Graph_2graph[DF_Results_Graph_2graph$Modelo == SumrzModeloName &
+                              DF_Results_Graph_2graph$Método == SumrzMetodoName &
+                              DF_Results_Graph_2graph$Datos == SumrzDatosName &
+                              DF_Results_Graph_2graph$alpha == SumrzalphaValue &
+                              DF_Results_Graph_2graph$Cor == SumrzCorValue, ]
+    
+    TapplySumVar <- tapply(as.numeric(DF_Results_Graph_2graph$Potencia),
+                           INDEX = DF_Results_Graph_2graph$Var, FUN = summary)
+    SumMin <- c(TapplySumVar$`Equal`[[1]], TapplySumVar$`Unequal Type I`[[1]],
+                TapplySumVar$`Unequal Type II`[[1]],TapplySumVar$`Unequal Type III`[[1]])
+    Sum2Q <- c(TapplySumVar$`Equal`[[2]], TapplySumVar$`Unequal Type I`[[2]],
+                TapplySumVar$`Unequal Type II`[[2]],TapplySumVar$`Unequal Type III`[[2]])
+    SumMedian <- c(TapplySumVar$`Equal`[[3]], TapplySumVar$`Unequal Type I`[[3]],
+                TapplySumVar$`Unequal Type II`[[3]],TapplySumVar$`Unequal Type III`[[3]]) 
+    SumMean <- c(TapplySumVar$`Equal`[[4]], TapplySumVar$`Unequal Type I`[[4]],
+                TapplySumVar$`Unequal Type II`[[4]],TapplySumVar$`Unequal Type III`[[4]]) 
+    Sum3Q <- c(TapplySumVar$`Equal`[[5]], TapplySumVar$`Unequal Type I`[[5]],
+                TapplySumVar$`Unequal Type II`[[5]],TapplySumVar$`Unequal Type III`[[5]]) 
+    SumMax <- c(TapplySumVar$`Equal`[[6]], TapplySumVar$`Unequal Type I`[[6]],
+                TapplySumVar$`Unequal Type II`[[6]],TapplySumVar$`Unequal Type III`[[6]])
+
+    MetodoNamesCol <- c(rep(SumrzMetodoName, length(VarNamesCol)))
+    AlphaNamesCol <- c(rep(SumrzalphaValue, length(VarNamesCol))) 
+    CorNamesCol <- c(rep(SumrzCorValue, length(VarNamesCol)))
+    VarNamesCol <- c(rownames(data.frame(TapplySumVar)))
+
+    TapplySumVarDFtemp <- data.frame(MetodoNamesCol, AlphaNamesCol, CorNamesCol, VarNamesCol,
+                                     SumMin, Sum2Q, SumMedian, SumMean, Sum3Q, SumMax)
+    colnames(TapplySumVarDFtemp) <- c("Método", "Alpha", "Cor", "Var",
+                                      "Min.", "1st Qu.", "Median", "Mean", "3rd Qu.", "Max.")
+
+    TapplySumVarDF <- rbind(TapplySumVarDF, TapplySumVarDFtemp)
+    arrange(TapplySumVarDF, Var, Cor)
+
+}
+
+stargazer(TapplySumVarDF, type = 'latex', summary=FALSE, rownames=TRUE,
+              header=FALSE, title=paste0("Sumario estadístico de la Potencia en las diferentes simulaciones ",
+                                         SumrzModeloName, " (", SumrzDatosName,"), mediante el método ", SumrzMetodoName),
+              label="tab:TabSim1", font.size = "scriptsize", single.row = TRUE,
+              column.sep.width = "-8pt", digits = 4, no.space = TRUE)
+
+# --------------------------------------------------------------------
+
+
+# Gráficos de densidad de los valores de potencia obtenidos:
+# ----------------------------------------------------------
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# PDF
+graph_path = file.path(paste0(getwd(), "/Resultados/Resultados Memoria/Gráficos Densidad Potencia (mvnorm)/Cor Homogénea"))
+dir.create(graph_path, recursive = TRUE, showWarnings = FALSE)
+    
+pdf(file = file.path(graph_path, paste0("Densidad de potencia calculada [MANOVA, Sin Transformar, ",
+                                        "mvnorm, Group = Var, Grid = alpha - Cor].pdf")),
+    width = 16, height = 12)
+
+p <- ggplot(DF_Results_Graph_2graph[DF_Results_Graph_2graph$Método == "MANOVA" &
+                                      DF_Results_Graph_2graph$Datos == 
+                                      unique(DF_Results_Graph_2graph$Datos)[1] &
+                                      DF_Results_Graph_2graph$Modelo == "mvnorm", ],
+            aes(x = Potencia, y = Var, fill = Var)) + 
+  geom_joy(scale = 8.5) + theme_joy(grid = FALSE) + 
+  scale_fill_cyclical(values = c('#0F00C37F', '#635AD57F', '#5A87D57F', '#8CAEE87F')) +
+  facet_grid(Cor ~ alpha, labeller = label_both) +
+  labs(title = paste0("Gráfico de densidad de los valores de potencia estadística (P), ",
+                      "calculados para el método MANOVA, y agrupados según el tipo de varianza (Var) impuesta"),
+       subtitle = expression("Simulaciones mvnorm para diferentes combinaciones"~alpha~"- Cor"),
+       x = TeX(paste0("Distribución de la potencia estadística (P)"), italic = TRUE),
+       y = TeX(paste0("Tipo de varianza (Var)"), italic = TRUE)) +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5, size = 12, vjust = -5,
+                                    margin = margin(0, 0, 30, 0), face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, size = 12, face = "italic"),
+          axis.title.x = element_text(size = 12),
+          axis.title.y = element_text(size = 12),
+          strip.text.x = element_text(size = 10),
+          strip.text.y = element_text(size = 10),
+          strip.background =element_rect(fill="white"),
+          strip.text = element_text(colour = 'black'),
+          legend.position = "bottom",
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 6),
+          legend.background = element_rect(fill = alpha('lightgray', 0.75)))
+
+print(p)
+
+dev.off()
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# PDF ALT
+graph_path = file.path(paste0(getwd(), "/Resultados/Resultados Memoria/Gráficos Densidad Potencia (mvnorm)/Cor Homogénea"))
+dir.create(graph_path, recursive = TRUE, showWarnings = FALSE)
+    
+pdf(file = file.path(graph_path, paste0("Densidad de potencia calculada [Sin Transformar, ",
+                                        "mvnorm, Group = Cor, Grid = alpha - Var (Eq, UneqI) - Método].pdf")),
+    width = 16, height = 12)
+
+pDF <- DF_Results_Graph_2graph[DF_Results_Graph_2graph$Datos == 
+                                      unique(DF_Results_Graph_2graph$Datos)[1] &
+                                      DF_Results_Graph_2graph$Var == 
+                                      unique(DF_Results_Graph_2graph$Var)[1] |
+                                      DF_Results_Graph_2graph$Var == 
+                                      unique(DF_Results_Graph_2graph$Var)[2] & 
+                                      DF_Results_Graph_2graph$Modelo == "mvnorm", ]
+  
+p <- ggplot(pDF, aes(x = Potencia, y = Cor, ..scale.., fill = Cor)) + 
+  geom_joy(scale = 8.5) + theme_joy(grid = FALSE) +
+  scale_fill_cyclical(values = c('#0F00C37F', '#635AD57F', '#5A87D57F', '#8CAEE87F')) +
+  facet_grid(Var + Método ~ alpha, labeller = label_both) +
+  labs(title = paste0("Gráfico de densidad de los valores de potencia estadística (P), ",
+                      "agrupados según el tipo de correlación (Cor) impuesta en la matriz homogénea"),
+       subtitle = expression("Simulaciones mvnorm para diferentes combinaciones"~alpha~"- Var - Método"),
+       x = TeX(paste0("Distribución de la potencia estadística (P)"), italic = TRUE),
+       y = TeX(paste0("Correlación utilizada (Cor)"), italic = TRUE)) +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5, size = 12, vjust = -5,
+                                    margin = margin(0, 0, 30, 0), face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, size = 12, face = "italic"),
+          axis.title.x = element_text(size = 12),
+          axis.title.y = element_text(size = 12),
+          strip.text.x = element_text(size = 10),
+          strip.text.y = element_text(size = 6),
+          strip.background =element_rect(fill="white"),
+          strip.text = element_text(colour = 'black'),
+          legend.position = "bottom",
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 6),
+          legend.background = element_rect(fill = alpha('lightgray', 0.75)))
+
+print(p)
+
+dev.off()
+
+# ----------------------------------------------------------
+
+
+# # # # # # # # # # # # # # # # # # # # # # #
+#           Simulaciones mvnorm             #
+#                                           #
+#      "Sim. 01-01-2024 22 h 33 min"        #
+#                     +                     #
+#      "Sim. 09-01-2024 11 h 47 min"        #
+#                                           #
+# # # # # # # # # # # # # # # # # # # # # # #
+#    Matriz de correlación inhomogénea      #
+# (valores aleatorios fuera de la diagonal) #
+# # # # # # # # # # # # # # # # # # # # # # #
+#         α = (0.05, 0.01, 0.001)           #
+# # # # # # # # # # # # # # # # # # # # # # #
+# -------------------------------------------
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# Directorio de la primera simulación a representar:
+setwd(file.path(getwd(), "Resultados/Modelo mvnorm/Sim. 01-01-2024 22 h 33 min"))
+DF_Results_Graph_2graph1 <- read.csv("DF_Results_Graph.csv")
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# Directorio de la segunda simulación a representar:
+setwd(file.path(getwd(), "Resultados/Modelo mvnorm/Sim. 09-01-2024 11 h 47 min"))
+DF_Results_Graph_2graph2 <- read.csv("DF_Results_Graph.csv")
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# Directorio de la unión de simulaciones:
+setwd(file.path(getwd(), "Resultados/Modelo mvnorm/Resultados Memoria"))
+
+# Unión de los DF:
+DF_Results_Graph_2graph <- rbind(DF_Results_Graph_2graph1, DF_Results_Graph_2graph2)
+DF_Results_Graph_2graph <- DF_Results_Graph_2graph[order(DF_Results_Graph_2graph$Método), ]
+
+## Para mvnorm forzamos que todos los valores de loc y lambda son NA.
+DF_Results_Graph_2graph$loc <- c(rep(NA, dim(DF_Results_Graph_2graph)[1]))
+DF_Results_Graph_2graph$lambda <- c(rep(NA, dim(DF_Results_Graph_2graph)[1]))
+
+## Para la matriz de correlación inhomogénea, forzamos que todos los valores de Cor sean "Aleat."
+DF_Results_Graph_2graph$Cor <- c(rep(toString("Aleat."), dim(DF_Results_Graph_2graph)[1]))
+
+## Para mvnorm no se aplicará ni Yscaled ni YnormMinMax ya que se genera otro estadístico diferente al que se está estudiando
+## (p_valor) y que, a parte de que no tiene porque ser invariante a transformaciones, NO SIRVE PARA COMPARAR MANTA-MANOVA.
+## Para simplex solo se estudiará MANTA, así que no es necesario corregir ni Ylog ni Yclr.
+
+# => Filtramos las transformaciones no necesarias:
+# .𝜏. unique(DF_Results_Graph_2graph$Datos)[c(1)] <=> Sin transformar
+# .𝜏. unique(DF_Results_Graph_2graph$Datos)[c(1, 4, 5, 6)]] <=> Sin transformar + clr + log-ratio + sqrt
+DF_Results_Graph_2graph <- DF_Results_Graph_2graph[DF_Results_Graph_2graph$Datos ==
+                                                     c(unique(DF_Results_Graph_2graph$Datos)[1:4]), ]
+# => Otros arreglos para la gráfica: etiquetas de Var + formato de Cor.
+DF_Results_Graph_2graph$Var[DF_Results_Graph_2graph$Var == "equal"] <- "Equal"
+DF_Results_Graph_2graph$Var[DF_Results_Graph_2graph$Var == "unequal"] <- "Unequal Type I"
+DF_Results_Graph_2graph$Var[DF_Results_Graph_2graph$Var == "unequalALT1"] <- "Unequal Type II"
+DF_Results_Graph_2graph$Var[DF_Results_Graph_2graph$Var == "unequalALT2"] <- "Unequal Type III"
+
+cat("\014") # Clean console
+
+
+DFtable <- subset(DF_Results_Graph_2graph, select = c(-loc, -stdev, -lambda))
+totres = dim(DFtable)[1]
+nhead = 15
+DFsampletable <- data.table(DFtable)[sample(.N, nhead)]
+DFsampletable[, 12] <- round(DFsampletable[, 12], digits = 2)
+
+stargazer(DFsampletable, type = 'latex', summary=FALSE, rownames=FALSE,
+          header=FALSE, title=paste0("Muestra aleatoria de ", nhead, " de los ", totres,
+                                     " resultados obtenidos para las simulaciones detalladas en "),
+          label="tab:TabSim1", font.size = "scriptsize", single.row = TRUE,
+          column.sep.width = "-8pt", digits = 3, no.space = TRUE)
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# -------------------------------------------
+
+# Sumarios estadísticos de la Potencia y el Tiempo de computación según el tipo de datos y alpha:
+# -----------------------------------------------------------------------------------------------
+# MethodName <- "MANTA"
+MethodName <- "MANOVA"
+for (TipoDatos in unique(DF_Results_Graph_2graph$Datos)){
+  for (AlphaSim in unique(DF_Results_Graph_2graph$alpha)){
+    
+    DFsummary <- DF_Results_Graph_2graph[DF_Results_Graph_2graph$Método == MethodName &
+                                           DF_Results_Graph_2graph$Datos == TipoDatos &
+                                           DF_Results_Graph_2graph$alpha == AlphaSim, ]
+    DFsummary <- DFsummary[, c(14, 15)]
+    
+    stargazer(DFsummary, type = 'latex', summary=TRUE, rownames=TRUE,
+              header=FALSE, title=paste0("Sumario estadístico de la Potencia y el tiempo 
+              de computación empleado en las simulaciones mvnorm de un conjunto de datos",
+              TipoDatos, ", y para un alpha =", AlphaSim, ", mediante el método ", MethodName),
+              label="tab:TabSim1", font.size = "scriptsize", single.row = TRUE,
+              column.sep.width = "-8pt", digits = 4, no.space = TRUE)
+  }
+}
+
+# -----------------------------------------------------------------------------------------------
+
+
+# Gráficos de densidad de los valores de potencia obtenidos:
+# ----------------------------------------------------------
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# PDF
+graph_path = file.path(paste0(getwd(), "/Resultados/Resultados Memoria/Gráficos Densidad Potencia (mvnorm)/Cor Inhomogénea"))
+dir.create(graph_path, recursive = TRUE, showWarnings = FALSE)
+    
+pdf(file = file.path(graph_path, paste0("Densidad de potencia calculada [Sin Transformar, ",
+                                        "mvnorm, Group = Var, Grid = alpha - Cor - Método].pdf")),
+    width = 16, height = 12)
+
+p <- ggplot(DF_Results_Graph_2graph[DF_Results_Graph_2graph$Datos == 
+                                      unique(DF_Results_Graph_2graph$Datos)[1] &
+                                      DF_Results_Graph_2graph$Modelo == "mvnorm", ],
+            aes(x = Potencia, y = Var, ..scale.., fill = Var)) + 
+  geom_joy(scale = 8.5) + theme_joy(grid = FALSE) + 
+  scale_fill_cyclical(values = c('#0F00C37F', '#635AD57F', '#5A87D57F', '#8CAEE87F')) +
+  facet_grid(Cor + Método ~ alpha, labeller = label_both) +
+  labs(title = paste0("Gráfico de densidad de los valores de potencia estadística (P), ",
+                      "agrupados según el tipo de varianza (Var) impuesta"),
+       subtitle = expression("Simulaciones mvnorm para diferentes combinaciones"~alpha~"- Cor (matriz inhomogénea) - Método"),
+       x = TeX(paste0("Distribución de la potencia estadística (P)"), italic = TRUE),
+       y = TeX(paste0("Tipo de varianza (Var)"), italic = TRUE)) +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5, size = 12, vjust = -5,
+                                    margin = margin(0, 0, 30, 0), face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, size = 12, face = "italic"),
+          axis.title.x = element_text(size = 12),
+          axis.title.y = element_text(size = 12),
+          strip.text.x = element_text(size = 10),
+          strip.text.y = element_text(size = 10),
+          strip.background =element_rect(fill="white"),
+          strip.text = element_text(colour = 'black'),
+          legend.position = "bottom",
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 6),
+          legend.background = element_rect(fill = alpha('lightgray', 0.75)))
+
+print(p)
+
+dev.off()
+
+# ----------------------------------------------------------
+
+
+# # # # # # # # # # # # # # # # # # # # # # # #
+#            Simulaciones símplex             #
+#                                             #
+#        "Sim. 02-01-2024 01 h 56 min"        #
+#                      +                      #
+#        "Sim. 09-01-2024 15 h 59 min"        #
+#                                             #
+# # # # # # # # # # # # # # # # # # # # # # # #
+#                ∆ max = 0.025                #
+# # # # # # # # # # # # # # # # # # # # # # # #
+#           α = (0.05, 0.01, 0.001)           #
+# # # # # # # # # # # # # # # # # # # # # # # #
+# ---------------------------------------------
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# Directorio de la primera simulación a representar:
+setwd(file.path(getwd(), "Resultados/Modelo simplex/Sim. 02-01-2024 01 h 56 min"))
+DF_Results_Graph_2graph1 <- read.csv("DF_Results_Graph.csv")
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# Directorio de la segunda simulación a representar:
+setwd(file.path(getwd(), "Resultados/Modelo simplex/Sim. 09-01-2024 15 h 59 min"))
+DF_Results_Graph_2graph2 <- read.csv("DF_Results_Graph.csv")
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# Directorio de la unión de simulaciones:
+setwd(file.path(getwd(), "Resultados/Modelo mvnorm/Resultados Memoria"))
+
+# Unión de los DF teniendo en cuenta solo MANTA:
+DF_Results_Graph_2graph <- rbind(DF_Results_Graph_2graph1[DF_Results_Graph_2graph1$Método == "MANTA", ],
+                                 DF_Results_Graph_2graph2[DF_Results_Graph_2graph2$Método == "MANTA", ])
+DF_Results_Graph_2graph <- DF_Results_Graph_2graph[order(DF_Results_Graph_2graph$delta), ]
+
+## Para simplex forzamos que todos los valores de Cor y lambda son NA.
+DF_Results_Graph_2graph$Cor <- c(rep(NA, dim(DF_Results_Graph_2graph)[1]))
+DF_Results_Graph_2graph$lambda <- c(rep(NA, dim(DF_Results_Graph_2graph)[1]))
+
+## Se estudiarán los datos sin transformar y las transformaciones log-ratio, sqrt y clr:
+DF_Results_Graph_2graph <- DF_Results_Graph_2graph[DF_Results_Graph_2graph$Datos ==
+                                                     unique(DF_Results_Graph_2graph$Datos)[1:4], ]
+
+cat("\014") # Clean console
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+DFtable <- subset(DF_Results_Graph_2graph, select = c(-Var, -Cor, -lambda))
+totres = dim(DFtable)[1]
+nhead = 15
+DFsampletable <- data.table(DFtable)[sample(.N, nhead)]
+DFsampletable[, 12] <- round(DFsampletable[, 12], digits = 2)
+
+stargazer(DFsampletable, type = 'latex', summary=FALSE, rownames=FALSE,
+          header=FALSE, title=paste0("Muestra aleatoria de ", nhead, " de los ", totres,
+                                     " resultados obtenidos para las simulaciones detalladas en "),
+          label="tab:TabSim1", font.size = "scriptsize", single.row = TRUE,
+          column.sep.width = "-8pt", digits = 4, no.space = TRUE)
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# ---------------------------------------------
+
+# Sumarios estadísticos de la Potencia y el Tiempo de computación según el tipo de datos y alpha:
+# -----------------------------------------------------------------------------------------------
+for (TipoDatos in unique(DF_Results_Graph_2graph$Datos)){
+  for (AlphaSim in unique(DF_Results_Graph_2graph$alpha)){
+    
+    DFsummary <- DF_Results_Graph_2graph[DF_Results_Graph_2graph$Datos == TipoDatos &
+                                           DF_Results_Graph_2graph$alpha == AlphaSim, ]
+    DFsummary <- DFsummary[, c(14, 15)]
+    
+    stargazer(DFsummary, type = 'latex', summary=TRUE, rownames=TRUE,
+              header=FALSE, title=paste0("Sumario estadístico de la Potencia y el tiempo 
+              de computación empleado en las simulaciones símplex de un conjunto de datos",
+              TipoDatos, ", y para un alpha =", AlphaSim),
+              label="tab:TabSim1", font.size = "scriptsize", single.row = TRUE,
+              column.sep.width = "-8pt", digits = 4, no.space = TRUE)
+  }
+}
+
+# Sumarios estadísticos de la Potencia y el Tiempo de computación según el tipo de datos y alpha:
+for (TipoDatos in unique(DF_Results_Graph_2graph$Datos)){
+  for (AlphaSim in unique(DF_Results_Graph_2graph$alpha)){
+    
+    DFsummary <- DF_Results_Graph_2graph[DF_Results_Graph_2graph$Datos == TipoDatos &
+                                           DF_Results_Graph_2graph$alpha == AlphaSim, ]
+    DFsummary <- DFsummary[, c(14, 15)]
+    
+    print(summary(DFsummary))
+  }
+}
+
+# -----------------------------------------------------------------------------------------------
+
+# Gráficos de densidad de los valores de potencia obtenidos:
+# ----------------------------------------------------------
+
+# Directorio de trabajo principal.
+work_dir <- "/Users/aitor/Desktop/RProjects/TFMgit"
+setwd(work_dir)
+
+# PDF
+graph_path = file.path(paste0(getwd(), "/Resultados/Resultados Memoria/Gráficos Densidad Potencia (simplex)"))
+dir.create(graph_path, recursive = TRUE, showWarnings = FALSE)
+    
+pdf(file = file.path(graph_path, paste0("Densidad de potencia calculada [Modelo = ",
+                                        toString(unique(DFsummary$Modelo)),
+                                        ", alpha = ", toString(AlphaSim), "].pdf")),
+    width = 16, height = 12)
+
+p <- ggplot(DF_Results_Graph_2graph, aes(x = Potencia, y = Datos, ..scale.., fill = Datos)) + 
+  geom_joy(scale = 8.5) + theme_joy(grid = FALSE) + 
+  scale_fill_cyclical(values = c('#0F00C37F', '#635AD57F', '#5A87D57F', '#8CAEE87F')) +
+  facet_wrap(~ alpha, labeller = label_value) +
+  labs(title = paste0("Gráfico de densidad de los valores de potencia estadística (P) ",
+                      "calculados para el método MANTA"),
+       subtitle = expression("Simulaciones 3-símplex para diferentes valores de"~alpha~", y diversos tipos de transformación de datos."),
+       x = TeX(paste0("Distribución de la potencia estadística (P)"), italic = TRUE),
+       y = TeX(paste0("Transformación de los datos"), italic = TRUE)) +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5, size = 12, vjust = -5,
+                                    margin = margin(0, 0, 30, 0), face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, size = 12, face = "italic"),
+          axis.title.x = element_text(size = 12),
+          axis.title.y = element_text(size = 12),
+          strip.text.x = element_text(size = 10),
+          strip.text.y = element_text(size = 10),
+          strip.background =element_rect(fill="white"),
+          strip.text = element_text(colour = 'black'),
+          legend.position = "bottom",
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 6),
+          legend.background = element_rect(fill = alpha('lightgray', 0.75)))
+
+print(p)
+
+dev.off()
+
+# PDF ALT
+graph_path = file.path(paste0(getwd(), "/Resultados/Resultados Memoria/Gráficos Densidad Potencia (simplex)"))
+dir.create(graph_path, recursive = TRUE, showWarnings = FALSE)
+    
+pdf(file = file.path(graph_path, paste0("Densidad de potencia calculada [MANTA, ",
+                                        "simplex, Group = Datos, Grid = alpha - q - loc].pdf")),
+    width = 16, height = 12)
+
+# pDF <- DF_Results_Graph_2graph[DF_Results_Graph_2graph$Datos == 
+#                                       unique(DF_Results_Graph_2graph$Datos)[1] &
+#                                       DF_Results_Graph_2graph$Var == 
+#                                       unique(DF_Results_Graph_2graph$Var)[1] |
+#                                       DF_Results_Graph_2graph$Var == 
+#                                       unique(DF_Results_Graph_2graph$Var)[2] & 
+#                                       DF_Results_Graph_2graph$Modelo == "mvnorm", ]
+  
+p <- ggplot(DF_Results_Graph_2graph, aes(x = Potencia, y = Datos, ..scale.., fill = Datos)) + 
+  geom_joy(scale = 8.5) + theme_joy(grid = FALSE) +
+  scale_fill_cyclical(values = c('#0F00C37F', '#635AD57F', '#5A87D57F', '#8CAEE87F')) +
+  facet_grid(q + loc ~ alpha, labeller = label_both) +
+  labs(title = paste0("Gráfico de densidad de los valores de potencia estadística (P), ",
+                      "agrupados según el tipo de transformación de datos"),
+       subtitle = expression("Simulaciones símplex para diferentes combinaciones"~alpha~"- q - loc"),
+       x = TeX(paste0("Distribución de la potencia estadística (P)"), italic = TRUE),
+       y = TeX(paste0("Correlación utilizada (Cor)"), italic = TRUE)) +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5, size = 12, vjust = -5,
+                                    margin = margin(0, 0, 30, 0), face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, size = 12, face = "italic"),
+          axis.title.x = element_text(size = 12),
+          axis.title.y = element_text(size = 12),
+          strip.text.x = element_text(size = 10),
+          strip.text.y = element_text(size = 6),
+          strip.background =element_rect(fill="white"),
+          strip.text = element_text(colour = 'black'),
+          legend.position = "bottom",
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 6),
+          legend.background = element_rect(fill = alpha('lightgray', 0.75)))
+
+print(p)
+
+dev.off()
+
+# PDF ALT
+
+    
+pdf(file = file.path(graph_path, paste0("Densidad de potencia calculada [Modelo = ",
+                                        toString(unique(DFsummary$Modelo)),
+                                        ", alpha = ", toString(AlphaSim), "].pdf")),
+    width = 16, height = 12)
+
+p <- ggplot(DF_Results_Graph_2graph, aes(x = Potencia, y = Datos, ..scale.., fill = Datos)) + 
+  geom_joy(scale = 8.5) + theme_joy(grid = FALSE) + 
+  scale_fill_cyclical(values = c('#0F00C37F', '#635AD57F', '#5A87D57F', '#8CAEE87F')) +
+  facet_wrap(~ alpha, labeller = label_value) +
+  labs(title = paste0("Gráfico de densidad de los valores de potencia estadística (P) ",
+                      "calculados para el método MANTA"),
+       subtitle = expression("Simulaciones 3-símplex para diferentes valores de"~alpha~", y diversos tipos de transformación de datos."),
+       x = TeX(paste0("Distribución de la potencia estadística (P)"), italic = TRUE),
+       y = TeX(paste0("Transformación de los datos"), italic = TRUE)) +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5, size = 12, vjust = -5,
+                                    margin = margin(0, 0, 30, 0), face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, size = 12, face = "italic"),
+          axis.title.x = element_text(size = 12),
+          axis.title.y = element_text(size = 12),
+          strip.text.x = element_text(size = 10),
+          strip.text.y = element_text(size = 10),
+          strip.background =element_rect(fill="white"),
+          strip.text = element_text(colour = 'black'),
+          legend.position = "bottom",
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 6),
+          legend.background = element_rect(fill = alpha('lightgray', 0.75)))
+
+print(p)
+
+dev.off()
+
+# ----------------------------------------------------------
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+```

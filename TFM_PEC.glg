@@ -1,0 +1,10 @@
+This is makeindex, version 2.17 [TeX Live 2023] (kpathsea + Thai support).
+Scanning style file ./TFM_PEC.ist...........................done (27 attributes redefined, 0 ignored).
+Scanning input file TFM_PEC.glo....
+!! Input index error (file = TFM_PEC.glo, line = 41):
+   -- Illegal space within numerals in second argument.
+done (40 entries accepted, 1 rejected).
+Sorting entries....done (217 comparisons).
+Generating output file TFM_PEC.gls....done (81 lines written, 0 warnings).
+Output written in TFM_PEC.gls.
+Transcript written in TFM_PEC.glg.
